@@ -164,12 +164,16 @@ SQL
   get '/' do
     authenticated!
 
+    # 現在のユーザーのプロファイルを取得
     profile = db.xquery('SELECT * FROM profiles WHERE user_id = ?', current_user[:id]).first
 
+    # ユーザーの最新5件の投稿を取得
     entries_query = 'SELECT * FROM entries WHERE user_id = ? ORDER BY created_at LIMIT 5'
     entries = db.xquery(entries_query, current_user[:id])
       .map{ |entry| entry[:is_private] = (entry[:private] == 1); entry[:title], entry[:content] = entry[:body].split(/\n/, 2); entry }
 
+    # 「あなたへのコメント」(最新10件)
+    # TODO めっちゃ重い
     comments_for_me_query = <<SQL
 SELECT c.id AS id, c.entry_id AS entry_id, c.user_id AS user_id, c.comment AS comment, c.created_at AS created_at
 FROM comments c
@@ -180,6 +184,7 @@ LIMIT 10
 SQL
     comments_for_me = db.xquery(comments_for_me_query, current_user[:id])
 
+    # 「あなたの友達の日記エントリ」
     entries_of_friends = []
     db.query('SELECT * FROM entries ORDER BY created_at DESC LIMIT 1000').each do |entry|
       next unless is_friend?(entry[:user_id])
@@ -188,6 +193,8 @@ SQL
       break if entries_of_friends.size >= 10
     end
 
+    # 「あなたの友達のコメント」
+    # TODO n+1 problem
     comments_of_friends = []
     db.query('SELECT * FROM comments ORDER BY created_at DESC LIMIT 1000').each do |comment|
       next unless is_friend?(comment[:user_id])
@@ -198,6 +205,8 @@ SQL
       break if comments_of_friends.size >= 10
     end
 
+    # 友人の取得
+    # TODO 友達の人数しか要らないのでいい感じに
     friends_query = 'SELECT * FROM relations WHERE one = ? OR another = ? ORDER BY created_at DESC'
     friends_map = {}
     db.xquery(friends_query, current_user[:id], current_user[:id]).each do |rel|
@@ -206,6 +215,8 @@ SQL
     end
     friends = friends_map.map{|user_id, created_at| [user_id, created_at]}
 
+    # 足あと
+    # TODO 重い
     query = <<SQL
 SELECT user_id, owner_id, DATE(created_at) AS date, MAX(created_at) AS updated
 FROM footprints
