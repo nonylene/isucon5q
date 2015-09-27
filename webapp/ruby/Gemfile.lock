@@ -6,10 +6,16 @@ GEM
     mysql2 (0.4.0)
     mysql2-cs-bind (0.0.6)
       mysql2
+    prefork_engine (0.0.5)
+      proc-wait3 (~> 1.7.2)
+    proc-wait3 (1.7.2)
     rack (1.6.4)
     rack-protection (1.5.3)
       rack
     raindrops (0.15.0)
+    rhebok (0.8.6)
+      prefork_engine (>= 0.0.4)
+      rack
     sinatra (1.4.6)
       rack (~> 1.4)
       rack-protection (~> 1.4)
@@ -27,5 +33,9 @@ DEPENDENCIES
   erubis
   mysql2
   mysql2-cs-bind
+  rhebok
   sinatra
   unicorn
+
+BUNDLED WITH
+   1.10.6

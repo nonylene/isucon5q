@@ -8,7 +8,7 @@ EnvironmentFile=/home/isucon/env.sh
 Environment=RACK_ENV=production
 PIDFile=/home/isucon/webapp/ruby/unicorn.pid
 
-ExecStart=/home/isucon/.local/ruby/bin/bundle exec unicorn -c unicorn_config.rb
+ExecStart=/home/isucon/.local/ruby/bin/bundle exec rackup -s Rhebok -O Path=/home/isucon/webapp/ruby/unix.sock -O MaxWorkers=10 -O MaxRequestPerChild=1000 -E production config.ru
 ExecStop=/usr/bin/kill -QUIT $MAINPID
 ExecReload=/bin/kill -USR2 $MAINPID
 
