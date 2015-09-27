@@ -174,12 +174,18 @@ SQL
 
     # 「あなたへのコメント」(最新10件)
     # TODO めっちゃ重い
+#    comments_for_me_query = <<SQL
+#SELECT c.id AS id, c.entry_id AS entry_id, c.user_id AS user_id, c.comment AS comment, c.created_at AS created_at
+#FROM comments c
+#JOIN entries e ON c.entry_id = e.id
+#WHERE e.user_id = ?
+#ORDER BY c.created_at DESC
+#LIMIT 10
+#SQL
     comments_for_me_query = <<SQL
-SELECT c.id AS id, c.entry_id AS entry_id, c.user_id AS user_id, c.comment AS comment, c.created_at AS created_at
-FROM comments c
-JOIN entries e ON c.entry_id = e.id
-WHERE e.user_id = ?
-ORDER BY c.created_at DESC
+SELECT id, entry_id, user_id, comment, created_at FROM comments c
+WHERE entry_id IN (SELECT entry_id FROM entries WHERE user_id = ?)
+ORDER BY created_at DESC
 LIMIT 10
 SQL
     comments_for_me = db.xquery(comments_for_me_query, current_user[:id])
@@ -216,7 +222,6 @@ SQL
     friends = friends_map.map{|user_id, created_at| [user_id, created_at]}
 
     # 足あと
-    # TODO 重い
     query = <<SQL
 SELECT user_id, owner_id, DATE(created_at) AS date, MAX(created_at) AS updated
 FROM footprints
@@ -239,6 +244,7 @@ SQL
     erb :index, locals: locals
   end
 
+  # ユーザーのプロファイルページ
   get '/profile/:account_name' do
     authenticated!
     owner = user_from_account(params['account_name'])
@@ -255,6 +261,7 @@ SQL
     erb :profile, locals: { owner: owner, profile: prof, entries: entries, private: permitted?(owner[:id]) }
   end
 
+  # 自分のプロファイルを更新
   post '/profile/:account_name' do
     authenticated!
     if params['account_name'] != current_user[:account_name]
@@ -280,6 +287,7 @@ SQL
     redirect "/profile/#{params['account_name']}"
   end
 
+  # ユーザーの日記最新20件
   get '/diary/entries/:account_name' do
     authenticated!
     owner = user_from_account(params['account_name'])
@@ -294,6 +302,7 @@ SQL
     erb :entries, locals: { owner: owner, entries: entries, myself: (current_user[:id] == owner[:id]) }
   end
 
+  # 特定の日記を見る
   get '/diary/entry/:entry_id' do
     authenticated!
     entry = db.xquery('SELECT * FROM entries WHERE id = ?', params['entry_id']).first
@@ -309,6 +318,7 @@ SQL
     erb :entry, locals: { owner: owner, entry: entry, comments: comments }
   end
 
+  # 日記を投稿する
   post '/diary/entry' do
     authenticated!
     query = 'INSERT INTO entries (user_id, private, body) VALUES (?,?,?)'
@@ -317,6 +327,7 @@ SQL
     redirect "/diary/entries/#{current_user[:account_name]}"
   end
 
+  # 特定の日記に対するコメント一覧
   post '/diary/comment/:entry_id' do
     authenticated!
     entry = db.xquery('SELECT * FROM entries WHERE id = ?', params['entry_id']).first
@@ -332,6 +343,7 @@ SQL
     redirect "/diary/entry/#{entry[:id]}"
   end
 
+  # 自分のマイページに対する足あと最新50件
   get '/footprints' do
     authenticated!
     query = <<SQL
@@ -346,6 +358,7 @@ SQL
     erb :footprints, locals: { footprints: footprints }
   end
 
+  # 自分の友達一覧
   get '/friends' do
     authenticated!
     query = 'SELECT * FROM relations WHERE one = ? OR another = ? ORDER BY created_at DESC'
@@ -358,6 +371,7 @@ SQL
     erb :friends, locals: { friends: list }
   end
 
+  # 友達になる
   post '/friends/:account_name' do
     authenticated!
     unless is_friend_account?(params['account_name'])
@@ -370,6 +384,7 @@ SQL
     end
   end
 
+  # 初期化
   get '/initialize' do
     db.query("DELETE FROM relations WHERE id > 500000")
     db.query("DELETE FROM footprints WHERE id > 500000")
