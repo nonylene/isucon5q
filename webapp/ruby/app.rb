@@ -210,10 +210,10 @@ SQL
 
     # 足あと
     query = <<SQL
-SELECT user_id, owner_id, DATE(created_at) AS date, MAX(created_at) AS updated
+SELECT user_id, owner_id, created_date AS date, MAX(created_at) AS updated
 FROM footprints
 WHERE user_id = ?
-GROUP BY user_id, owner_id, DATE(created_at)
+GROUP BY user_id, owner_id, created_date
 ORDER BY updated DESC
 LIMIT 10
 SQL
@@ -334,10 +334,10 @@ SQL
   get '/footprints' do
     authenticated!
     query = <<SQL
-SELECT user_id, owner_id, DATE(created_at) AS date, MAX(created_at) as updated
+SELECT user_id, owner_id, created_date AS date, MAX(created_at) as updated
 FROM footprints
 WHERE user_id = ?
-GROUP BY user_id, owner_id, DATE(created_at)
+GROUP BY user_id, owner_id, created_date
 ORDER BY updated DESC
 LIMIT 50
 SQL
