@@ -1,4 +1,3 @@
-
 require 'sinatra/base'
 require 'mysql2'
 require 'mysql2-cs-bind'
@@ -55,9 +54,10 @@ class Isucon5::WebApp < Sinatra::Base
 
     def authenticate(email, password)
       query = <<SQL
-SELECT u.id AS id, u.account_name AS account_name, u.nick_name AS nick_name, u.email AS email, u.salt AS salt
+SELECT u.id AS id, u.account_name AS account_name, u.nick_name AS nick_name, u.email AS email
 FROM users u
-WHERE u.email = ? AND u.passhash = SHA2(CONCAT(?, u.salt), 512)
+JOIN salts s ON u.id = s.user_id
+WHERE u.email = ? AND u.passhash = SHA2(CONCAT(?, s.salt), 512)
 SQL
       result = db.xquery(query, email, password).first
       unless result
@@ -173,15 +173,6 @@ SQL
       .map{ |entry| entry[:is_private] = (entry[:private] == 1); entry[:title], entry[:content] = entry[:body].split(/\n/, 2); entry }
 
     # 「あなたへのコメント」(最新10件)
-    # TODO めっちゃ重い
-#    comments_for_me_query = <<SQL
-#SELECT c.id AS id, c.entry_id AS entry_id, c.user_id AS user_id, c.comment AS comment, c.created_at AS created_at
-#FROM comments c
-#JOIN entries e ON c.entry_id = e.id
-#WHERE e.user_id = ?
-#ORDER BY c.created_at DESC
-#LIMIT 10
-#SQL
     comments_for_me_query = <<SQL
 SELECT id, entry_id, user_id, comment, created_at FROM comments c
 WHERE entry_id IN (SELECT entry_id FROM entries WHERE user_id = ?)
@@ -190,29 +181,7 @@ LIMIT 10
 SQL
     comments_for_me = db.xquery(comments_for_me_query, current_user[:id])
 
-    # 「あなたの友達の日記エントリ」
-    entries_of_friends = []
-    db.query('SELECT * FROM entries ORDER BY created_at DESC LIMIT 1000').each do |entry|
-      next unless is_friend?(entry[:user_id])
-      entry[:title] = entry[:body].split(/\n/).first
-      entries_of_friends << entry
-      break if entries_of_friends.size >= 10
-    end
-
-    # 「あなたの友達のコメント」
-    # TODO n+1 problem
-    comments_of_friends = []
-    db.query('SELECT * FROM comments ORDER BY created_at DESC LIMIT 1000').each do |comment|
-      next unless is_friend?(comment[:user_id])
-      entry = db.xquery('SELECT * FROM entries WHERE id = ?', comment[:entry_id]).first
-      entry[:is_private] = (entry[:private] == 1)
-      next if entry[:is_private] && !permitted?(entry[:user_id])
-      comments_of_friends << comment
-      break if comments_of_friends.size >= 10
-    end
-
     # 友人の取得
-    # TODO 友達の人数しか要らないのでいい感じに
     friends_query = 'SELECT * FROM relations WHERE one = ? OR another = ? ORDER BY created_at DESC'
     friends_map = {}
     db.xquery(friends_query, current_user[:id], current_user[:id]).each do |rel|
@@ -220,6 +189,24 @@ SQL
       friends_map[rel[key]] ||= rel[:created_at]
     end
     friends = friends_map.map{|user_id, created_at| [user_id, created_at]}
+    friends_id = friends.map{|f| f[0]}
+
+    # 「あなたの友達の日記エントリ」
+    entries_of_friends = db.xquery('SELECT * FROM entries WHERE user_id IN (?) ORDER BY created_at DESC LIMIT 10', [friends_id]).map do |entry|
+      entry[:title] = entry[:body].split(/\n/).first
+      entry
+    end
+
+    # 「あなたの友達のコメント」
+    # TODO n+1 problem
+    comments_of_friends = []
+    db.xquery('SELECT * FROM comments WHERE user_id IN (?) ORDER BY created_at DESC LIMIT 100', [friends_id]).each do |comment|
+      entry = db.xquery('SELECT * FROM entries WHERE id = ?', comment[:entry_id]).first
+      entry[:is_private] = (entry[:private] == 1)
+      next if entry[:is_private] && !permitted?(entry[:user_id])
+      comments_of_friends << comment
+      break if comments_of_friends.size >= 10
+    end
 
     # 足あと
     query = <<SQL
