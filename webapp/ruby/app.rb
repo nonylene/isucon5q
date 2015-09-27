@@ -200,7 +200,7 @@ SQL
     # 「あなたの友達のコメント」
     # TODO n+1 problem
     comments_of_friends = []
-    db.xquery('SELECT * FROM comments WHERE user_id IN (?) ORDER BY created_at DESC LIMIT 100', [friends_id]).each do |comment|
+    db.xquery('SELECT * FROM comments WHERE user_id IN (?) ORDER BY created_at DESC LIMIT 20', [friends_id]).each do |comment|
       entry = db.xquery('SELECT * FROM entries WHERE id = ?', comment[:entry_id]).first
       entry[:is_private] = (entry[:private] == 1)
       next if entry[:is_private] && !permitted?(entry[:user_id])
