@@ -1,3 +1,4 @@
+
 require 'sinatra/base'
 require 'mysql2'
 require 'mysql2-cs-bind'
@@ -54,10 +55,9 @@ class Isucon5::WebApp < Sinatra::Base
 
     def authenticate(email, password)
       query = <<SQL
-SELECT u.id AS id, u.account_name AS account_name, u.nick_name AS nick_name, u.email AS email
+SELECT u.id AS id, u.account_name AS account_name, u.nick_name AS nick_name, u.email AS email, u.salt AS salt
 FROM users u
-JOIN salts s ON u.id = s.user_id
-WHERE u.email = ? AND u.passhash = SHA2(CONCAT(?, s.salt), 512)
+WHERE u.email = ? AND u.passhash = SHA2(CONCAT(?, u.salt), 512)
 SQL
       result = db.xquery(query, email, password).first
       unless result
