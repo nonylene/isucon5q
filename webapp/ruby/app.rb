@@ -3,6 +3,7 @@ require 'mysql2'
 require 'mysql2-cs-bind'
 require 'tilt/erubis'
 require 'erubis'
+require 'redis'
 
 module Isucon5
   class AuthenticationError < StandardError; end
@@ -50,6 +51,14 @@ class Isucon5::WebApp < Sinatra::Base
       client.query_options.merge!(symbolize_keys: true)
       Thread.current[:isucon5_db] = client
       client
+    end
+
+
+    def redis
+      return Thread.current[:isucon5_redis] if Thread.current[:isucon5_redis]
+      redis = Redis.new(:host => "127.0.0.1", :port => 6379, driver: :hiredis) 
+      Thread.current[:isucon5_redis] = redis
+      redis
     end
 
     def authenticate(email, password)
@@ -179,6 +188,7 @@ WHERE entry_id IN (SELECT entry_id FROM entries WHERE user_id = ?)
 ORDER BY created_at DESC
 LIMIT 10
 SQL
+
     comments_for_me = db.xquery(comments_for_me_query, current_user[:id])
 
     # 友人の取得
@@ -348,7 +358,7 @@ SQL
   # 自分の友達一覧
   get '/friends' do
     authenticated!
-    query = 'SELECT * FROM relations WHERE one = ? OR another = ? ORDER BY created_at DESC'
+    query = 'SELECT * FROM relations WHERE one = ? OR another = ? order by created_at DESC'
     friends = {}
     db.xquery(query, current_user[:id], current_user[:id]).each do |rel|
       key = (rel[:one] == current_user[:id] ? :another : :one)
@@ -377,5 +387,12 @@ SQL
     db.query("DELETE FROM footprints WHERE id > 500000")
     db.query("DELETE FROM entries WHERE id > 500000")
     db.query("DELETE FROM comments WHERE id > 1500000")
+
+    redis.flushall()
+#    db.xquery('select entry_id from comments').each do |comm|
+#      redis.sadd("comments:" + comm[:entry_id].to_s, comm[:id])
+#    end
+
+    db.query("alter table relations add index (one, created_at)")
   end
 end
